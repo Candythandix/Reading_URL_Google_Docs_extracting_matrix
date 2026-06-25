@@ -1,0 +1,210 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyOvDk3xPPR73ZVfFH/G6CV4",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/Candythandix/Reading_URL_Google_Docs_extracting_matrix/blob/main/Reading_URL_Google_docsipynb\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 1,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "N4F4BInlis17",
+        "outputId": "a01dac0f-2e2d-4093-f810-2ca2af175903"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Requirement already satisfied: requests in /usr/local/lib/python3.12/dist-packages (2.32.4)\n",
+            "Requirement already satisfied: beautifulsoup4 in /usr/local/lib/python3.12/dist-packages (4.13.5)\n",
+            "Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.12/dist-packages (from requests) (3.4.7)\n",
+            "Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.12/dist-packages (from requests) (3.18)\n",
+            "Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.12/dist-packages (from requests) (2.5.0)\n",
+            "Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.12/dist-packages (from requests) (2026.5.20)\n",
+            "Requirement already satisfied: soupsieve>1.2 in /usr/local/lib/python3.12/dist-packages (from beautifulsoup4) (2.8.4)\n",
+            "Requirement already satisfied: typing-extensions>=4.0.0 in /usr/local/lib/python3.12/dist-packages (from beautifulsoup4) (4.15.0)\n"
+          ]
+        }
+      ],
+      "source": [
+        "!pip install requests beautifulsoup4\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import requests\n",
+        "from html.parser import HTMLParser\n",
+        "import pandas\n",
+        "\n",
+        "\n",
+        "\"\"\"\n",
+        "Immediately retrieving the values formt he table within the Google Docs\n",
+        "document and placing them in a dataframe\n",
+        "\"\"\"\n",
+        "\n",
+        "\n",
+        "class GoogleDoc_Decode_HTML_Parser(HTMLParser):\n",
+        "    def __init__(self):\n",
+        "      super().__init__()\n",
+        "      self.in_table = False\n",
+        "      self.in_row = False\n",
+        "      self.in_cell = False\n",
+        "      self.current_row_cells = [] # store each row before placing it in dataframe\n",
+        "\n",
+        "      # were storing each row in a dictionary\n",
+        "      self.matrix_dictionary = {}\n",
+        "      self.row_counter = 0  # will track dictionary keys\n",
+        "      self.is_header = True\n",
+        "\n",
+        "    def handle_starttag(self, tag, attrs):\n",
+        "        if tag == \"table\":\n",
+        "            self.in_table = True\n",
+        "\n",
+        "        elif tag == \"tr\" and self.in_table:\n",
+        "          self.in_row = True\n",
+        "          self.current_row_cells = []\n",
+        "\n",
+        "        elif tag == \"td\" and self.in_row:\n",
+        "          self.in_cell = True\n",
+        "\n",
+        "    def handle_endtag(self, tag):\n",
+        "        if tag == \"table\":\n",
+        "            self.in_table = False\n",
+        "\n",
+        "        elif tag == \"tr\" and self.in_table:\n",
+        "          self.in_row = False\n",
+        "\n",
+        "\n",
+        "          if self.is_header: # skip the first header row\n",
+        "            self.is_header = False\n",
+        "            self.current_row_cells = []\n",
+        "            return\n",
+        "\n",
+        "          # Each row has 3 value , x coordinat, value and y coordinate\n",
+        "          if len(self.current_row_cells) == 3:\n",
+        "\n",
+        "            self.matrix_dictionary[self.row_counter] = {\n",
+        "                \"x_coordinate\": int(self.current_row_cells[0]),\n",
+        "                \"value\": self.current_row_cells[1],\n",
+        "                \"y_coordinate\": int(self.current_row_cells[2])\n",
+        "            }\n",
+        "            self.row_counter += 1 # increment the counter to place the next row\n",
+        "\n",
+        "        elif tag == \"td\" and self.in_row:\n",
+        "          self.in_cell = False\n",
+        "\n",
+        "\n",
+        "    def handle_data(self, data):\n",
+        "        if self.in_cell:\n",
+        "          final_data = data.strip()\n",
+        "          if final_data :\n",
+        "            self.current_row_cells.append(final_data)\n",
+        "\n",
+        "            # store in a datframe to loop thro\n",
+        "\n",
+        "class GoogleDocument:\n",
+        "    given_url =\"https://docs.google.com/document/d/e/2PACX-1vTMOmshQe8YvaRXi6gEPKKlsC6UpFJSMAk4mQjLm_u1gmHdVVTaeh7nBNFBRlui0sTZ-snGwZM4DBCT/pub\"\n",
+        "    try_url = \"https://docs.google.com/document/u/0/d/e/2PACX-1vQiVT_Jj04V35C-YRzvoqyEYYzdXHcRyMUZCVQRYCu6gQJX7hbNhJ5eFCMuoX47cAsDW2ZBYppUQITr/pub?pli=1\"\n",
+        "\n",
+        "\n",
+        "    @staticmethod\n",
+        "    def decodeFromUrl(url):\n",
+        "        response = requests.get(url)\n",
+        "\n",
+        "        parser = GoogleDoc_Decode_HTML_Parser()\n",
+        "        parser.feed(response.text)\n",
+        "\n",
+        "        final_matrix_dictionary = parser.matrix_dictionary\n",
+        "\n",
+        "        # depending on the different url passed through we check the largest value of x and y coordinate\n",
+        "        max_x = max(final_matrix_dictionary[i][\"x_coordinate\"] for i in range(parser.row_counter))\n",
+        "        max_y = max(final_matrix_dictionary[i][\"y_coordinate\"] for i in range(parser.row_counter))\n",
+        "\n",
+        "\n",
+        "      # create a grid\n",
+        "        grid = [[\" \"] * (max_x + 1) for _ in range(max_y +1)]\n",
+        "\n",
+        "\n",
+        "        for nn in range (parser.row_counter):\n",
+        "          x = final_matrix_dictionary[nn][\"x_coordinate\"]\n",
+        "          y = final_matrix_dictionary[nn][\"y_coordinate\"]\n",
+        "          char = final_matrix_dictionary[nn][\"value\"]\n",
+        "          grid [y][x] = char\n",
+        "\n",
+        "        for kk in reversed(grid):\n",
+        "\n",
+        "            print(\"\".join(kk))  # print out the rows in the grid\n",
+        "            print() # prints and empty line making it look simiar to the exmaplw\n",
+        "\n",
+        "GoogleDocument.decodeFromUrl(GoogleDocument.try_url)\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "EkSMLcDKjhlr",
+        "outputId": "255649d1-03a7-4903-9233-8399de0b2dfe"
+      },
+      "execution_count": 25,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "  ████████░   ██░     ██░ ██████████░ ██░           ███░ ████████░    ██░    ███░ ██████░\n",
+            "\n",
+            "███░     ███░ ██░     ██░ ██░         ███░   ███░   ██░  ██░     ██░  ██░  ███░     ██░  \n",
+            "\n",
+            "██░       ██░ ██░     ██░ ██░          ██░  █████░ ███░  ██░      ██░ ██░███░       ██░  \n",
+            "\n",
+            "██░       ██░ ██████████░ ████████░    ███░ ██░██░ ██░   ██░      ██░ ████░         ██░  \n",
+            "\n",
+            "██░       ██░ ██░     ██░ ██░           ██░██░ ██░██░    ██░      ██░ ██░███░       ██░  \n",
+            "\n",
+            "███░     ███░ ██░     ██░ ██░           ████░   ████░    ██░     ██░  ██░  ███░     ██░  \n",
+            "\n",
+            "  ████████░   ██░     ██░ ██████████░    ██░     ██░     ████████░    ██░    ███░ ██████░\n",
+            "\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "itgkZs11oSiP"
+      },
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}
